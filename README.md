@@ -3,7 +3,12 @@
 [![License: CC0-1.0](https://img.shields.io/badge/License-CC0_1.0-lightgrey.svg)](http://creativecommons.org/publicdomain/zero/1.0/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-> A practitioner's reference for Physical AI, Edge Computing, Industrial IoT, and AI/ML at the manufacturing edge — foundation models, frameworks, datasets, and architectures for building AI systems that operate in the real world.
+> [!IMPORTANT]
+> This is a **personal, curated collection** for learning and reference purposes.
+> It is **not** an official Microsoft repository, product, or service.
+> Not affiliated with, endorsed by, or supported by Microsoft Corporation.
+
+> A practitioner's referencefor Physical AI, Edge Computing, Industrial IoT, and AI/ML at the manufacturing edge — foundation models, frameworks, datasets, and architectures for building AI systems that operate in the real world.
 
 **Physical AI** = AI systems that perceive, reason about, and act in the physical world through sensor data, edge computing, and real-time inference — not in a data center, but on the factory floor.
 
@@ -184,11 +189,9 @@ This covers the full stack: from foundation models trained on physical-world dat
 
 | Project | Description |
 |---------|-------------|
-| [aio-sensor-intelligence](https://github.com/udtri/aio-sensor-intelligence) | Deploy time-series foundation models for sensor anomaly detection with Azure IoT Operations. |
+| [aio-edge-intelligence](https://github.com/udtri/aio-edge-intelligence) | Deploy time-series foundation models for sensor anomaly detection on Kubernetes edge clusters. |
 | [Azure IoT Operations Samples](https://github.com/Azure-Samples/explore-iot-operations) ![GitHub stars](https://img.shields.io/github/stars/Azure-Samples/explore-iot-operations?style=flat-square) | Official samples and quickstarts for Azure IoT Operations. |
-| [AWS IoT Greengrass](https://github.com/aws-greengrass) | Deploy and run ML models on edge devices with AWS IoT Greengrass components. |
 | [Eclipse IoT](https://iot.eclipse.org/) | Open-source IoT projects ecosystem — protocols, gateways, and device management frameworks. |
-| [Industrial Edge by Siemens](https://github.com/industrial-edge) | Reference apps and examples for Siemens Industrial Edge platform. |
 
 ## 📚 Learning Resources
 
@@ -262,3 +265,13 @@ Contributions welcome! Read the [contribution guidelines](CONTRIBUTING.md) first
 [![CC0](https://licensebuttons.net/p/zero/1.0/88x31.png)](http://creativecommons.org/publicdomain/zero/1.0/)
 
 To the extent possible under law, the contributors have waived all copyright and related or neighboring rights to this work. See [LICENSE](LICENSE) for details.
+
+---
+
+## Disclaimer
+
+This is a personal, curated collection for educational and reference purposes. It is not an official Microsoft product, service, or recommendation.
+
+## Trademark Notice
+
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/legal/intellectualproperty/trademarks/usage/general). Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.

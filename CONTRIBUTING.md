@@ -1,4 +1,4 @@
-# Contributing to Awesome Physical AI
+# Contributing to Physical AI Field Guide
 
 Thank you for your interest in contributing! This list is community-driven and we welcome high-quality additions.
 
