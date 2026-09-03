@@ -1,3 +1,15 @@
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Prevent accidentally copied Git internals from being committed at the root.
+/COMMIT_EDITMSG
+/HEAD
+/config
+/description
+/hooks/
+/index
+/info/
+/logs/
+/objects/
+/refs/

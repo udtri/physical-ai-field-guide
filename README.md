@@ -2,14 +2,24 @@
 
 [![License: CC0-1.0](https://img.shields.io/badge/License-CC0_1.0-lightgrey.svg)](http://creativecommons.org/publicdomain/zero/1.0/)
 
+_Last reviewed: September 3, 2026_
+
 > [!IMPORTANT]
-> A personal, opinionated guide for practitioners shipping Physical AI. Not affiliated with, endorsed by, or supported by Microsoft Corporation.
+> An independent, opinionated guide for practitioners shipping Physical AI.
 
-**Physical AI** is the layer of AI that closes the loop with reality — perceiving, reasoning about, and acting in the physical world through sensor data, edge compute, and real-time inference. It runs on the factory floor, in the warehouse, on the operating table, and on the humanoid form factor. It is constrained by latency, safety, and reliability in ways that cloud AI is not, and it ships only when you have all three of: the right **model**, the right **platform**, and a working **production pattern**.
+**Physical AI** closes the loop between software and reality. It observes through sensors, reasons over physical state, and acts through people or machines. It runs on factory floors, in warehouses, in hospitals, and inside robots. Latency, safety, reliability, and incomplete data are product requirements—not infrastructure details.
 
-This guide is curated, not exhaustive. It catalogs the work I think practitioners building Physical AI systems should know about right now — the models that meaningfully advance the state of the art, the platforms that production teams actually run on, and the reference architectures that turn the two into something deployable. Entries that haven't shipped public code, weights, or a serious reference implementation are omitted on purpose.
+This guide is curated, not exhaustive. It tracks models with public weights, usable APIs, or serious reference implementations. A benchmark result earns attention; an observable, reversible production loop earns trust.
 
-For Azure + NVIDIA production work, the headline reference is **[microsoft/physical-ai-toolchain](https://github.com/microsoft/physical-ai-toolchain)** — an open-source, production-ready blueprint for running robotics and Physical AI workloads end-to-end (Isaac Sim/Lab → Azure ML training → Jetson edge deployment, with managed identities, IaC, and GitOps).
+For Azure + NVIDIA work, the headline reference is **[microsoft/physical-ai-toolchain](https://github.com/microsoft/physical-ai-toolchain)**. It now offers a local-first T0 path and a graduated T0–T5 architecture for capture, training, evaluation, deployment, and fleet operations.
+
+## What changed in 2026
+
+- **[TimesFM 3.0](https://research.google/blog/timesfm-3-a-zero-shot-foundation-model-for-multivariate-forecasting/)** adds native multivariate forecasting and covariates. Its current weights are non-commercial, so TimesFM 2.5 remains the permissive deployment choice.
+- **[Gemini Robotics 2](https://deepmind.google/blog/gemini-robotics-2-brings-whole-body-intelligence-to-robots/)** separates embodied reasoning, whole-body control, and an on-device VLA. ER 2 has a public API; the action models remain early access.
+- **[Isaac GR00T N1.7](https://developer.nvidia.com/blog/develop-humanoid-robot-policies-end-to-end-with-nvidia-isaac-gr00t/)** ships an Apache-2.0, 3B VLA with ONNX and TensorRT export paths.
+- **[Cosmos 3](https://github.com/NVIDIA/Cosmos)** unifies physical reasoning, world generation, sound, and action modeling across 4B, 16B, and 64B variants.
+- **[SAM 3.1](https://github.com/facebookresearch/sam3/blob/main/RELEASE_SAM3p1.md)** makes language-prompted, multi-object video segmentation substantially more practical.
 
 ---
 
@@ -20,7 +30,8 @@ For Azure + NVIDIA production work, the headline reference is **[microsoft/physi
 | **Use cases** | Production deployment patterns | Visual inspection, predictive maintenance, AMRs, manipulation, humanoids |
 | **Models** | The intelligence layer | Time-series FMs, VLMs, VLAs, world FMs |
 | **Platform** | Simulation, edge runtimes, orchestration | Isaac Sim/Lab, ROS 2, Azure IoT Operations, Jetson, ONNX/TensorRT |
-| **Data plane** | Connectivity between physical and digital | OPC UA, MQTT, time-series stores |
+| **Data plane** | State, context, and lineage across the loop | OPC UA, MQTT, ROS 2, MCAP, OpenUSD, time-series stores |
+| **Operations** | Evaluation, rollout, and feedback | Shadow mode, safety gates, drift, rollback, fleet telemetry |
 | **Reference architectures** | End-to-end blueprints you can fork | `microsoft/physical-ai-toolchain`, `aio-edge-intelligence` |
 
 ---
@@ -35,40 +46,42 @@ For Azure + NVIDIA production work, the headline reference is **[microsoft/physi
 6. [World foundation models](#6-world-foundation-models)
 7. [Data & connectivity](#7-data--connectivity)
 8. [Datasets](#8-datasets)
-9. [Reference architectures](#9-reference-architectures)
+9. [Evaluation & operations](#9-evaluation--operations)
+10. [Reference architectures](#10-reference-architectures)
 
 ---
 
 ## 1. Use cases
 
-The hard part of Physical AI is not the model — it is the deployment pattern around it. Each use case below is a pattern that has crossed from research demo to production reference, with a public blueprint you can read, fork, or learn from. Pair every pattern with a platform decision (section 2) and an operational reference architecture (section 9).
+The hard part of Physical AI is not the model — it is the deployment pattern around it. Each use case below is a pattern that has crossed from research demo to production reference, with a public blueprint you can read, fork, or learn from. Pair every pattern with a platform decision (section 2), an evaluation plan (section 9), and an operational reference architecture (section 10).
 
 - **Visual inspection / quality control** — Edge VLM or anomaly model behind a real-time API, with operator-in-the-loop labelling. Reference: [Anomalib](https://github.com/open-edge-platform/anomalib) for the model layer; [microsoft/physical-ai-toolchain](https://github.com/microsoft/physical-ai-toolchain) for the inspection-on-Azure-IoT-Operations pattern; pair with Florence-2 or Grounding DINO when you need zero-shot defect description.
-- **Predictive maintenance & anomaly detection on time-series** — Time-series foundation model running zero-shot on sensor streams, alerting through the IIoT data plane. Reference: [Chronos-2](https://github.com/amazon-science/chronos-forecasting) or [TimesFM 2.5](https://github.com/google-research/timesfm) behind Azure ML managed endpoints; [aio-edge-intelligence](https://github.com/udtri/aio-edge-intelligence) for the deployment pattern on Arc-enabled Kubernetes.
-- **Autonomous mobile robots & warehouse logistics** — Fleet simulation in Isaac Sim, sim-to-real with Isaac Lab, OTA model rollout to Jetson, telemetry back to the cloud. Reference: [microsoft/physical-ai-toolchain](https://github.com/microsoft/physical-ai-toolchain) is the primary Azure + NVIDIA AMR blueprint; use [Cosmos-Predict2](https://github.com/nvidia-cosmos/cosmos-predict2) for synthetic navigation augmentation.
+- **Predictive maintenance & time-series forecasting** — Start with a zero-shot foundation model, but keep deterministic thresholds and failure policies outside the model. Reference: [Chronos-2](https://github.com/amazon-science/chronos-forecasting), [TimesFM](https://github.com/google-research/timesfm), or [Toto 2.0](https://github.com/DataDog/toto); [aio-edge-intelligence](https://github.com/udtri/aio-edge-intelligence) shows the provider pattern on Kubernetes.
+- **Autonomous mobile robots & warehouse logistics** — Fleet simulation in Isaac Sim, sim-to-real with Isaac Lab, OTA model rollout to Jetson, telemetry back to the cloud. Reference: [microsoft/physical-ai-toolchain](https://github.com/microsoft/physical-ai-toolchain) is an Azure + NVIDIA AMR blueprint; use [Cosmos 3](https://github.com/NVIDIA/Cosmos) to evaluate synthetic navigation data and physical reasoning.
 - **Robotic manipulation & pick-and-place** — Teleop data collection → VLA fine-tune → eval in sim → deploy on real hardware. Reference: [LeRobot](https://github.com/huggingface/lerobot) gives you the full loop (teleop → dataset → `lerobot-train --policy=pi0`); [ManiSkill 3](https://github.com/haosulab/ManiSkill) for standardized eval.
-- **Embodied AI & humanoid deployment** — Cosmos for synthetic training data → Isaac Lab for locomotion RL → GR00T for the policy → Jetson Thor for inference. Reference: [Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T) is the only end-to-end open-weight stack for this pattern; `microsoft/physical-ai-toolchain` extends it to managed Azure deployment.
+- **Embodied AI & humanoid deployment** — Cosmos for synthetic data → Isaac Lab for training and evaluation → GR00T for the policy → Jetson Thor for inference. [Isaac GR00T N1.7](https://github.com/NVIDIA/Isaac-GR00T) offers an open, commercially usable integrated path. [Gemini Robotics 2](https://deepmind.google/models/gemini-robotics/) is a managed-model counterpoint.
 
 ---
 
 ## 2. Platform
 
-A Physical AI platform has three jobs: simulate the world cheaply, train at cloud scale, and serve inference on the edge with latency and safety guarantees. The 2024–2025 landscape has settled around the NVIDIA stack for simulation and edge GPU, the Azure stack for cloud training and edge orchestration, and a handful of inference runtimes you'll always end up using.
+A Physical AI platform has four jobs: capture trustworthy demonstrations, simulate edge cases, train and evaluate policies, and run them safely at the edge. In 2026 the useful abstraction is a local-first loop that can graduate to cloud training and fleet operations without changing data contracts.
 
 ### Simulation & robot learning
 
-- **[NVIDIA Isaac Sim](https://developer.nvidia.com/isaac/sim)** — NVIDIA. RTX-accelerated physics simulator on Omniverse; standard for AMR, manipulation, and humanoid sim-to-real.
+- **[NVIDIA Isaac Sim](https://developer.nvidia.com/isaac/sim)** — NVIDIA. RTX-accelerated physics simulator on Omniverse for AMR, manipulation, and humanoid sim-to-real.
 - **[NVIDIA Isaac Lab](https://github.com/isaac-sim/IsaacLab)** — NVIDIA. GPU-accelerated RL/IL framework on Isaac Sim 5.x; the substrate the GR00T training workflow assumes.
-- **[Genesis](https://github.com/Genesis-Embodied-AI/Genesis)** — community. Universal physics engine (rigid + MPM + SPH + FEM + PBD) in one Python-native framework; 43M FPS on a single 4090.
+- **[Genesis](https://github.com/Genesis-Embodied-AI/Genesis)** — community. GPU-parallel, Python-native physics across rigid bodies, MPM, SPH, FEM, and PBD.
 - **[MuJoCo Playground](https://github.com/google-deepmind/mujoco_playground)** — Google DeepMind. Curated GPU-accelerated RL environments on MJX; DeepMind's recommended successor to Brax envs.
-- **[MuJoCo / MJX](https://github.com/google-deepmind/mujoco)** — Google DeepMind. The differentiable JAX-native physics backend; standard for analytic policy gradients.
+- **[MuJoCo / MJX](https://github.com/google-deepmind/mujoco)** — Google DeepMind. A differentiable, JAX-native physics backend for accelerated simulation and optimization.
 - **[ManiSkill 3](https://github.com/haosulab/ManiSkill)** — UCSD / Hillbot. SAPIEN-backed parallel manipulation simulator with real2sim examples; baselines for Octo, RDT-1B, and RT-X.
+- **[Isaac Lab-Arena](https://github.com/isaac-sim/IsaacLab-Arena)** — NVIDIA. A simulation evaluation framework for repeatable policy comparisons across tasks, embodiments, and environments.
 
 ### Edge runtimes & inference
 
 - **[ONNX Runtime](https://github.com/microsoft/onnxruntime)** — Microsoft. The portability standard from PyTorch/TF training to heterogeneous edge hardware.
-- **[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)** — NVIDIA. Required for serving VLA and world-model components at Jetson Orin/Thor throughput.
-- **[NVIDIA Triton Inference Server](https://github.com/triton-inference-server/server)** — NVIDIA. Multi-framework production inference server; the right primitive for multi-model robot pipelines (perception → reasoning → action).
+- **[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)** — NVIDIA. An optimized NVIDIA path for serving language and multimodal model components.
+- **[NVIDIA Triton Inference Server](https://github.com/triton-inference-server/server)** — NVIDIA. A multi-framework inference server for multi-model pipelines such as perception → reasoning → action.
 - **[ExecuTorch](https://github.com/pytorch/executorch)** — Meta / PyTorch. PyTorch ahead-of-time export with a 50 KB runtime; 12+ hardware backends from MCUs to mobile to robots.
 
 ### Cloud, orchestration & edge management
@@ -76,77 +89,85 @@ A Physical AI platform has three jobs: simulate the world cheaply, train at clou
 - **[Azure IoT Operations](https://learn.microsoft.com/azure/iot-operations/)** — Microsoft. Kubernetes-native edge data plane (MQTT broker, OPC UA connector, dataflows) on Arc-enabled clusters. GA Nov 2024.
 - **[Azure Arc](https://learn.microsoft.com/azure/azure-arc/)** — Microsoft. Hybrid management plane that lets you treat edge sites as first-class Azure resources.
 - **[NVIDIA OSMO](https://developer.nvidia.com/osmo)** — NVIDIA. Workflow orchestration glue between Cosmos data generation, Isaac Lab training, and model evaluation on DGX Cloud.
-- **[K3s](https://github.com/k3s-io/k3s)** — Rancher / SUSE. Lightweight certified Kubernetes for edge sites; the most common substrate for Arc-enabled edge.
+- **[K3s](https://github.com/k3s-io/k3s)** — Rancher / SUSE. Lightweight certified Kubernetes for edge sites, including Arc-enabled deployments.
 - **[ROS 2](https://github.com/ros2/ros2)** — Open Source Robotics Foundation. The robotics middleware; assume it for any real-robot integration unless you have a strong reason not to.
-- **[NVIDIA Jetson (Orin, Thor)](https://developer.nvidia.com/embedded-computing)** — NVIDIA. The dominant edge GPU for VLA and VLM inference at the robot.
+- **[NVIDIA Jetson (Orin, Thor)](https://developer.nvidia.com/embedded-computing)** — NVIDIA. An edge GPU platform for VLA and VLM inference at the robot.
 
 ---
 
 ## 3. Time-series & sensor foundation models
 
-For two decades, time-series forecasting and anomaly detection were per-dataset bespoke modelling exercises. Since 2024, a small set of foundation models trained on hundreds of billions of points across diverse domains have become the right default — zero-shot performance now matches or beats hand-tuned baselines on many sensor workloads, and fine-tuning is fast. The list below is the short list I'd actually evaluate today.
+Time-series foundation models are now credible zero-shot baselines. They are not a substitute for backtesting against seasonal naïve, gradient-boosted, and domain-specific models. Compare point accuracy, calibration, latency, memory, missing-data behavior, and performance after distribution shifts.
 
-- **[TimesFM 2.5](https://github.com/google-research/timesfm)** — Google Research. Decoder-only TS foundation model; 200M params, 16k context, continuous quantile head. *Sept 2025.* Strongest open zero-shot univariate baseline; production paths via BigQuery ML and Vertex Model Garden.
-- **[Chronos-2](https://github.com/amazon-science/chronos-forecasting)** — Amazon. Zero-shot univariate, multivariate, **and** covariate-informed forecasting in one model. *Oct 2025.* SOTA on fev-bench and GIFT-Eval; SageMaker JumpStart deployment path.
-- **[Chronos-Bolt](https://github.com/amazon-science/chronos-forecasting)** — Amazon. Patch-based direct multi-step variant; 250× faster and 20× more memory-efficient than original Chronos. *Nov 2024.* The latency-constrained drop-in.
-- **[MOIRAI 2.0 / Moirai-MoE](https://github.com/SalesforceAIResearch/uni2ts)** — Salesforce AI Research. Universal TS transformer trained on LOTSA; MoE variant adds sparse routing; Moirai 2.0-R-small released Aug 2025. The GIFT-Eval benchmark workhorse.
-- **[MOMENT](https://huggingface.co/AutonLab)** — CMU Auton Lab. Open TS foundation models (up to 385M) pretrained on MIMIC-III, ETT, ECG, and sensor data — the only major TS FM with explicit healthcare and physiological-signal coverage.
-- **[Lag-Llama](https://github.com/time-series-foundation-models/lag-llama)** — Mila / IIT Delhi. Probabilistic LLaMA-style TS FM with lag-based tokenization; the lightweight OSS baseline.
-- **[Toto](https://www.datadoghq.com/blog/introducing-toto/)** — Datadog. 1B-param decoder-only model pretrained exclusively on observability telemetry. *Jan 2025.* Not open-weights yet, but the only model purpose-built for cloud-infrastructure sensor data and worth tracking.
+- **[TimesFM 3.0](https://github.com/google-research/timesfm)** — Google Research. A 330M-parameter model trained on more than 1T points, with native multivariate targets and past or known-future covariates. *August 2026.* Current checkpoint weights are restricted to non-commercial, non-production use.
+- **[TimesFM 2.5](https://github.com/google-research/timesfm)** — Google Research. A 200M-parameter univariate model with 16k context and quantile forecasts. Apache-2.0 weights and the safer TimesFM choice for product evaluation.
+- **[Chronos-2](https://github.com/amazon-science/chronos-forecasting)** — Amazon. A 120M-parameter, Apache-2.0 model for zero-shot univariate, multivariate, and covariate-informed forecasting. Managed deployment paths exist through SageMaker.
+- **[Toto 2.0](https://github.com/DataDog/toto)** — Datadog. An Apache-2.0 family from 4M to 2.5B parameters, trained on observability and synthetic data. Evaluate the small checkpoints when edge memory matters.
+- **[Chronos-Bolt](https://github.com/amazon-science/chronos-forecasting)** — Amazon. Patch-based direct multi-step models optimized for low-latency forecasting. Still a strong constrained-runtime baseline.
+- **[MOIRAI 2.0 / Moirai-MoE](https://github.com/SalesforceAIResearch/uni2ts)** — Salesforce AI Research. Universal forecasting models trained on LOTSA, with sparse MoE variants and broad benchmark coverage.
+- **[MOMENT](https://github.com/moment-timeseries-foundation-model/moment)** — CMU Auton Lab. A useful multi-task baseline spanning forecasting, reconstruction, anomaly detection, classification, and imputation.
 
 ---
 
 ## 4. Computer vision & vision-language models
 
-The shift to evaluate in 2024–2025 was from task-specific CV models (one detector, one segmenter, one classifier) to general-purpose VLMs that handle detection, grounding, segmentation, captioning, and document parsing from one checkpoint. For Physical AI specifically, the question is rarely "which model is best on COCO" — it's "which model survives fine-tuning on my industrial dataset and runs at the latency my line needs."
+The useful 2026 pattern is a shared visual backbone with small task adapters, plus a specialized real-time detector where latency demands it. For industrial vision, test the actual defect distribution, camera geometry, lighting changes, and smallest important feature—not only public benchmarks.
 
-- **[SAM 2.1](https://github.com/facebookresearch/sam2)** — Meta FAIR. Streaming-memory transformer for promptable image and video segmentation; the de facto segmentation backbone for robot perception.
-- **[Qwen3-VL](https://github.com/QwenLM/Qwen3-VL)** — Alibaba / Qwen. Dynamic-resolution VLM with native video, grounding, document parsing, and agentic tool use; available in Dense and MoE up to 72B+; top OSS scores on DocVQA, VideoMME, and spatial reasoning.
-- **[InternVL 3](https://github.com/OpenGVLab/InternVL)** — Shanghai AI Lab. Fully open VLM family (1B → 78B) with tile-based dynamic resolution; the most capable fully-open option for high-resolution industrial imagery.
-- **[Florence-2](https://huggingface.co/microsoft/Florence-2-large)** — Microsoft. 0.77B seq-to-seq VLM that unifies captioning, grounding, detection, segmentation, and OCR in a single checkpoint; uniquely versatile at the edge.
-- **[Anomalib](https://github.com/open-edge-platform/anomalib)** — Intel / OpenVINO. 30+ anomaly detection algorithms (PatchCore, STFPM, WinCLIP, Dinomaly) with direct OpenVINO export and a no-code Studio UI. The production-default for visual defect detection.
-- **[YOLO11](https://github.com/ultralytics/ultralytics)** — Ultralytics. Latest YOLO generation; still the industry default for real-time detection on embedded targets, with OBB and pose estimation out of the box.
-- **[RF-DETR](https://github.com/roboflow/RF-DETR)** — Roboflow. Real-time deformable-DETR (55.3 AP COCO at >60 FPS); best choice for fine-tuned open-set detection without per-class retraining overhead.
-- **[Grounded SAM 2](https://github.com/IDEA-Research/Grounded-SAM-2)** — IDEA Research. Grounding DINO 1.5/1.6 + SAM 2 for text-prompted detect-and-segment-in-video; the strongest open zero-shot pipeline for unstructured environments.
+- **[SAM 3.1](https://github.com/facebookresearch/sam3)** — Meta. Promptable concept detection, segmentation, and tracking from text or visual examples. The 3.1 release adds a much faster multi-object video path; validate export support before choosing it for an edge target.
+- **[SAM 3D](https://github.com/facebookresearch/sam-3d-objects)** — Meta. Open checkpoints and inference code for reconstructing objects and scenes from a single image. Useful for bootstrapping spatial assets and pose, not a metrology replacement.
+- **[DINOv3](https://github.com/facebookresearch/dinov3)** — Meta. Self-supervised visual backbones from edge-sized ConvNeXt variants to ViT-7B. A strong frozen backbone when industrial labels are scarce.
+- **[Qwen3-VL](https://github.com/QwenLM/Qwen3-VL)** — Alibaba / Qwen. Dynamic-resolution VLM with native video, grounding, document parsing, and tool use; available in Dense and MoE variants.
+- **[InternVL 3](https://github.com/OpenGVLab/InternVL)** — Shanghai AI Lab. Open VLM family with tile-based dynamic resolution for high-resolution imagery.
+- **[Florence-2](https://huggingface.co/microsoft/Florence-2-large)** — Microsoft. A compact seq-to-seq VLM that unifies captioning, grounding, detection, segmentation, and OCR.
+- **[Anomalib](https://github.com/open-edge-platform/anomalib)** — Intel / OpenVINO. A library of anomaly-detection algorithms with OpenVINO export and a no-code Studio UI.
+- **[YOLO26](https://docs.ultralytics.com/models/yolo26/)** — Ultralytics. Edge-first, end-to-end detection without NMS, plus segmentation, pose, classification, and oriented boxes. Review AGPL-3.0 or enterprise licensing before product use.
+- **[RF-DETR](https://github.com/roboflow/RF-DETR)** — Roboflow. A real-time deformable-DETR family for fine-tuned detection and segmentation.
+- **[Grounded SAM 2](https://github.com/IDEA-Research/Grounded-SAM-2)** — IDEA Research. Grounding DINO + SAM 2 for text-prompted detection, segmentation, and tracking in video.
 
 ---
 
 ## 5. Vision-language-action models
 
-VLAs are the model class that turned robotics from "one policy per task" into "one policy per embodiment, sometimes per category." 2024–2025 was the year they actually started working — both as research artifacts and as production-deployable code with open weights. The list below is the set of VLAs you can pick up, fine-tune on your data, and deploy on real hardware today.
+VLAs are moving robotics from one policy per task toward adaptable policies across tasks and embodiments. Access still matters: an impressive closed demo and an open checkpoint with a reproducible fine-tuning path belong in different decision columns.
 
-- **[π₀ / π₀-FAST / π₀.5 (openpi)](https://github.com/Physical-Intelligence/openpi)** — Physical Intelligence. Flow-matching VLA with fast autoregressive variant; π₀.5 adds open-world generalization via knowledge insulation. The empirical state of the art for dexterous manipulation, with fully open weights.
-- **[Isaac GR00T N1.7](https://github.com/NVIDIA/Isaac-GR00T)** — NVIDIA. Open generalist humanoid VLA (VLM perception + diffusion action head); now built on a Cosmos-Reason / Qwen3-VL backbone. The only humanoid foundation model with end-to-end NVIDIA stack integration (Isaac Lab → Jetson Thor) under Apache 2.0.
-- **[LeRobot](https://github.com/huggingface/lerobot)** — Hugging Face. The practical integration layer: hardware-agnostic robot API, `LeRobotDataset` format, and out-of-the-box policies including π₀.5, GR00T N1.5, SmolVLA, and Diffusion Policy. If you need to deploy a VLA on real hardware without writing a custom stack, start here.
-- **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)** — Hugging Face. Compact VLA designed for consumer-grade GPUs and Jetson-class edge — the only VLA explicitly engineered for resource-constrained deployment.
+- **[π₀ / π₀-FAST / π₀.5 (openpi)](https://github.com/Physical-Intelligence/openpi)** — Physical Intelligence. Flow-matching and autoregressive VLA families with public base and task checkpoints. π₀.5 is the current supported path for open-world generalization.
+- **[Isaac GR00T N1.7](https://github.com/NVIDIA/Isaac-GR00T)** — NVIDIA. An Apache-2.0, 3B generalist VLA with a Cosmos-Reason2/Qwen3-VL backbone and ONNX/TensorRT export. The tightest open integration across Isaac Lab, LeRobot, and Jetson Thor.
+- **[Gemini Robotics 2](https://deepmind.google/models/gemini-robotics/)** — Google DeepMind. A family covering whole-body VLA control, ER 2 high-level planning, and an on-device VLA. ER 2 is available through a public API; VLA access is currently limited to partners.
+- **[LeRobot](https://github.com/huggingface/lerobot)** — Hugging Face. The practical integration layer for hardware, `LeRobotDataset`, training, and evaluation. Version 0.6 includes policies such as π₀.5, GR00T N1.7, SmolVLA, XVLA, and world-model integrations.
+- **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)** — Hugging Face. A compact VLA designed for consumer-grade GPUs and Jetson-class edge deployment.
 - **[RDT-1B](https://github.com/thu-ml/RoboticsDiffusionTransformer)** — Tsinghua THUML. 1B-parameter diffusion transformer for bimanual manipulation with language + multi-image conditioning. ICLR 2025 oral; the open bimanual baseline.
 - **[OpenVLA](https://github.com/openvla/openvla)** — Stanford / UC Berkeley. 7B Prismatic-VLM fine-tuned on Open X-Embodiment. The established open 7B baseline — well-benchmarked, widely fine-tuned, with LoRA scripts.
-- **[Octo](https://github.com/octo-models/octo)** — UC Berkeley RAIL. 27M–93M generalist diffusion policy pretrained on 800k trajectories; the go-to lightweight option for fast sim-to-real transfer.
+- **[Octo](https://github.com/octo-models/octo)** — UC Berkeley RAIL. A 27M–93M generalist diffusion policy pretrained on 800k trajectories and designed for downstream fine-tuning.
 
 ---
 
 ## 6. World foundation models
 
-World foundation models are the answer to the "where does training data come from?" problem in robotics. Instead of collecting another 10,000 hours of teleop, you generate physically plausible video and sensor data from a world model and use it to train or augment your policy. NVIDIA Cosmos is currently the only open, complete suite for this; the rest of the field is research-stage but moving fast.
+World models expand the long tail of training and evaluation scenarios. They do not remove the need for real demonstrations or a physics simulator. Treat generated data as a versioned dataset with provenance, filters, and downstream acceptance tests.
 
-- **[Cosmos-Predict2](https://github.com/nvidia-cosmos/cosmos-predict2)** — NVIDIA. Text2World and Video2World generation up to 14B params, with post-training scripts for custom robot and AV domains. The only complete open-weight world model suite usable for robotics synthetic data generation at scale.
-- **[Cosmos-Transfer1](https://github.com/nvidia-cosmos/cosmos-transfer1)** — NVIDIA. ControlNet-style world-to-world transfer that converts depth/segmentation/edge/LiDAR/HDMap signals into photorealistic video; single-step distilled variant released Aug 2025. The key sim-to-photoreal bridge for domain randomization.
-- **[Cosmos-Reason1](https://github.com/nvidia-cosmos/cosmos-reason1)** — NVIDIA. 7B VLM (Qwen2.5-VL base + SFT + RL) for physical-AI reasoning — spatial-temporal understanding and trajectory critic for plausibility evaluation.
-- **[Genie 2](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/)** — Google DeepMind. Action-conditioned world model that generates playable 3D environments from a single image. No public code or weights yet, but the directional bet that large-scale video pretraining can produce controllable physics without an explicit simulator.
-- **[1X World Model](https://github.com/1x-technologies/1xgpt)** — 1X Technologies. Compact (~500M) action-conditioned model trained on real humanoid robot data — the only public world model built on humanoid telemetry rather than AV or game footage.
-- **[Open-Sora 2.0](https://github.com/hpcaitech/Open-Sora)** — HPC-AI Tech. Highest-quality open generative video backbone; not robotics-specific, but the right starting point for fine-tuning your own world model on robot footage.
+- **[Cosmos 3](https://github.com/NVIDIA/Cosmos)** — NVIDIA. A unified mixture-of-transformers family that can reason over text and vision or generate vision, sound, and actions. Super is 64B, Nano is 16B, and Edge is 4B; models use the OpenMDW-1.1 license.
+- **[Cosmos Curator](https://github.com/NVIDIA-NeMo/Curator)** / **[Cosmos Evaluator](https://github.com/nvidia-cosmos/cosmos-evaluator)** — NVIDIA. The data-processing and automated-evaluation layers around Cosmos. These matter as much as the generator when synthetic data enters a training loop.
+- **[Cosmos Reason 2](https://github.com/nvidia-cosmos/cosmos-reason2)** — NVIDIA. The prior-generation physical-reasoning model remains relevant because its 2B variant is the visual backbone inside GR00T N1.7.
+- **[Genie 3](https://deepmind.google/blog/genie-3-a-new-frontier-for-world-models/)** — Google DeepMind. A research system for interactive 720p worlds at 20–24 FPS with minute-scale consistency. It is a frontier signal, not an open deployment option.
+- **[1X World Model](https://github.com/1x-technologies/1xgpt)** — 1X Technologies. A compact action-conditioned model trained on real humanoid robot data.
+- **[Open-Sora 2.0](https://github.com/hpcaitech/Open-Sora)** — HPC-AI Tech. An open generative-video backbone that can be adapted to robot footage, although it is not robotics-specific.
 
 ---
 
 ## 7. Data & connectivity
 
-A model is only as good as the data plane underneath it. For Physical AI that means industrial protocols (OPC UA, MQTT) for getting bits off the equipment, a broker that can hold up under fan-out and fan-in, and a store that handles time-series at scale. Keep this layer boring on purpose — exotic choices here are how you get paged at 3 a.m.
+A model is only as useful as the operational context around its inputs and outputs. Preserve timestamps, units, coordinate frames, calibration, asset identity, operator actions, model version, and decision outcome. Without that lineage, you have a demo—not a learning system.
 
 - **[OPC UA](https://opcfoundation.org/)** — OPC Foundation. The industrial interoperability standard; assume it for any greenfield OT integration.
 - **[MQTT](https://mqtt.org/)** — OASIS. Lightweight pub/sub for constrained devices and links.
+- **[ROS 2 / DDS](https://docs.ros.org/en/jazzy/)** — The robot message graph and middleware layer. Treat message schemas and coordinate frames as durable data contracts.
+- **[MCAP](https://mcap.dev/)** — An indexed multimodal log container for robotics and sensor data. A practical boundary between capture, replay, inspection, and training.
+- **[LeRobotDataset](https://github.com/huggingface/lerobot)** — A shared dataset contract for observations, actions, video, metadata, and policy training.
+- **[OpenUSD](https://openusd.org/)** — A composable scene description for geometry, semantics, materials, and simulation assets.
 - **[Eclipse Mosquitto](https://github.com/eclipse-mosquitto/mosquitto)** — Eclipse. The canonical open-source MQTT broker.
 - **[Apache Kafka](https://github.com/apache/kafka)** — Apache. Distributed event streaming for high-throughput, real-time pipelines once data crosses into the cloud.
-- **[InfluxDB](https://github.com/influxdata/influxdb)** / **[TimescaleDB](https://github.com/timescale/timescaledb)** — InfluxData / Timescale. The two defaults for time-series storage; pick by team familiarity and SQL needs.
+- **[Apache Parquet](https://parquet.apache.org/)** — The durable analytical boundary for sensor features, labels, and fleet-scale training data.
+- **[InfluxDB](https://github.com/influxdata/influxdb)** / **[TimescaleDB](https://github.com/timescale/timescaledb)** — Operational time-series stores; pick by workload and team familiarity.
 - **[Apache PLC4X](https://github.com/apache/plc4x)** — Apache. Universal protocol adapter for talking to industrial PLCs through one API.
 
 ---
@@ -158,17 +179,32 @@ A short list of benchmark datasets that remain useful — the canonical ones for
 - **[NASA C-MAPSS](https://data.nasa.gov/Aerospace/CMAPSS-Jet-Engine-Simulated-Data/ff5v-kuh6)** — Turbofan engine degradation; the standard for remaining-useful-life (RUL) benchmarks.
 - **[CWRU Bearing Dataset](https://engineering.case.edu/bearingdatacenter)** — Vibration data with seeded bearing faults; the de facto fault-diagnosis baseline.
 - **[MVTec AD](https://www.mvtec.com/company/research/datasets/mvtec-ad)** — Industrial texture and object anomaly detection; the canonical benchmark Anomalib reports on.
-- **[Open X-Embodiment](https://robotics-transformer-x.github.io/)** — 22-embodiment robot dataset; the largest open trajectory corpus used to pretrain OpenVLA, Octo, and RT-X.
+- **[Open X-Embodiment](https://robotics-transformer-x.github.io/)** — A 22-embodiment robot dataset used to pretrain OpenVLA, Octo, and RT-X.
 - **[DROID](https://droid-dataset.github.io/)** — 76k teleoperated trajectories across 564 scenes and 86 tasks; the standard manipulation pretraining set referenced by π₀-FAST.
 
 ---
 
-## 9. Reference architectures
+## 9. Evaluation & operations
+
+The production question is not “does the model work?” It is “under which conditions should the system trust, defer, stop, or recover?” Build evaluation and operations into the architecture before the first live action.
+
+1. **Record a replayable episode.** Keep raw observations, actions, timestamps, calibration, asset context, and software versions together.
+2. **Evaluate offline and in simulation.** Track task success, constraint violations, latency, uncertainty, recovery behavior, and slices that represent the long tail.
+3. **Run in shadow mode.** Compare model decisions with the existing process without controlling equipment.
+4. **Gate authority.** Start with recommendations, then bounded actions, and only expand the envelope with evidence.
+5. **Make rollback physical.** Version models, data contracts, transforms, and safety policies. Preserve a deterministic safe state outside the learned model.
+6. **Close the loop.** Route failures and human interventions back into curation, labeling, simulation, and retraining.
+
+Useful starting points: **[Isaac Lab-Arena](https://github.com/isaac-sim/IsaacLab-Arena)** for policy evaluation, **[LeRobot](https://github.com/huggingface/lerobot)** for common eval flows, and **[Cosmos Evaluator](https://github.com/nvidia-cosmos/cosmos-evaluator)** for world-model outputs.
+
+---
+
+## 10. Reference architectures
 
 End-to-end blueprints that wire the model, platform, and data layers above into something you can actually deploy. These are the repos I'd point a team at on day one if they were building a new Physical AI workload — they short-circuit weeks of architecture decisions.
 
-- **[microsoft/physical-ai-toolchain](https://github.com/microsoft/physical-ai-toolchain)** — Microsoft. **The production reference for running robotics and Physical AI workloads on Azure + NVIDIA.** Open-source, IaC-driven (Terraform), and integrates Isaac Sim / Isaac Lab, NVIDIA OSMO, Azure ML, AKS, Azure Arc, MLflow, and Jetson edge deployment with Entra ID and managed identities. Covers simulation, edge data capture, ROS-to-LeRobot conversion, training, ONNX/TensorRT packaging, and GitOps deployment to the edge. If you are evaluating Azure for Physical AI, start here.
-- **[udtri/aio-edge-intelligence](https://github.com/udtri/aio-edge-intelligence)** — Deploys time-series foundation models for sensor anomaly detection on Arc-enabled Kubernetes with Azure IoT Operations as the data plane. The smaller, sensor-side counterpart to physical-ai-toolchain.
+- **[microsoft/physical-ai-toolchain](https://github.com/microsoft/physical-ai-toolchain)** — Microsoft. A local-first T0 path through a T0–T5 adoption model for data capture, simulation, Azure ML/OSMO training, evaluation, ONNX/TensorRT packaging, GitOps deployment, and fleet operations. Start here for an Azure + NVIDIA reference.
+- **[udtri/aio-edge-intelligence](https://github.com/udtri/aio-edge-intelligence)** — A smaller sensor-side pattern for MOMENT and Google TimesFM inference on Kubernetes, with MQTT and optional Azure IoT Operations integration.
 - **[Azure-Samples/explore-iot-operations](https://github.com/Azure-Samples/explore-iot-operations)** — Microsoft. Official samples and quickstarts for Azure IoT Operations; the right starting point for getting the data plane online before adding models on top.
 
 ---
@@ -185,7 +221,7 @@ To the extent possible under law, the contributors have waived all copyright and
 
 ## Disclaimer
 
-This is a personal, curated collection for educational and reference purposes. It is not an official Microsoft product, service, or recommendation.
+This is a personal, curated collection for educational and reference purposes. It is not an official product, service, or recommendation from any company named here.
 
 ## Trademark notice
 
